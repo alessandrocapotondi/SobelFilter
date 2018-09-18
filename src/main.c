@@ -1,5 +1,6 @@
 /*
  * Copyright 2018 Pedro Melgueira
+ * Contribution 2018 (C) ETH Zurich and University of Bologna
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,10 +18,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <hero-target.h>
 
 #include "macros.h"
 #include "sobel.h"
 #include "file_operations.h"
+
 
 #define ARGS_NEEDED 4
 
@@ -45,7 +48,7 @@ int main(int argc, char *argv[]) {
 
     // Get arguments
     if(argc < ARGS_NEEDED) {
-        printf("Usage: TODO\n");
+        printf("sobel file_in file_out 123x456 [-i file_h_out file_v_out] [-g file_gray]\n");
         return 1;
     }
 
@@ -78,7 +81,7 @@ int main(int argc, char *argv[]) {
         // If there is a flag to create intermediate files
         if(strcmp(argv[arg_index], "-i") == 0) {
             if(arg_index+3 > argc) {
-                printf("Usage: TODO\n");
+                printf("sobel file_in file_out 123x456 [-i file_h_out file_v_out] [-g file_gray]\n");
                 return 1;
             }
 
@@ -91,7 +94,7 @@ int main(int argc, char *argv[]) {
 
         else if(strcmp(argv[arg_index], "-g") == 0) {
             if(arg_index+2 > argc) {
-                printf("Usage: TODO\n");
+                printf("sobel file_in file_out 123x456 [-i file_h_out file_v_out] [-g file_gray]\n");
                 return 1;
             }
 
@@ -110,7 +113,16 @@ int main(int argc, char *argv[]) {
     // Read file to rgb and get size
     readFile(file_in, &rgb, rgb_size);
 
-    int gray_size = sobelFilter(rgb, &gray, &sobel_h_res, &sobel_v_res, &contour_img, width, height);
+    // Allocation of image buffers
+    int gray_size = rgb_size / 3;
+    gray = malloc(sizeof(byte) * gray_size);
+    sobel_h_res = malloc(sizeof(byte) * gray_size);
+    sobel_v_res = malloc(sizeof(byte) * gray_size);
+    contour_img = malloc(sizeof(byte) * gray_size);
+
+    omp_set_default_device(BIGPULP_MEMCPY);
+    #pragma omp target map(to: rgb[0:rgb_size], width, height) map(from: gray[0:gray_size], sobel_h_res[0:gray_size], sobel_v_res[0:gray_size], contour_img[0:gray_size])
+    sobelFilter(rgb, gray, sobel_h_res, sobel_v_res, contour_img, width, height);
 
     // Write gray image
     if(gray_file) {
@@ -125,6 +137,11 @@ int main(int argc, char *argv[]) {
 
     // Write sobel img to a file
     writeFile(file_out, contour_img, gray_size);
+
+    free(gray);
+    free(sobel_h_res);
+    free(sobel_v_res);
+    free(contour_img);
 
     return 0;
 }
